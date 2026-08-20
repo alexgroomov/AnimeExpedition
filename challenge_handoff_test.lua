@@ -319,6 +319,24 @@ local function selectMacroProfile(name)
     return saved, err
 end
 
+local function macroProfileNames()
+    local ok, config = pcall(function()
+        if not isfile(macroConfigFile) then return nil end
+        return HttpService:JSONDecode(readfile(macroConfigFile))
+    end)
+    if not ok or type(config) ~= "table" or type(config.profiles) ~= "table" then
+        return {}, nil
+    end
+    local names = {}
+    for name, profile in pairs(config.profiles) do
+        if type(name) == "string" and type(profile) == "table" then
+            table.insert(names, name)
+        end
+    end
+    table.sort(names, function(a, b) return a:lower() < b:lower() end)
+    return names, type(config.selected) == "string" and config.selected or nil
+end
+
 local function queueFunction()
     local env = (getgenv and getgenv()) or _G
     return env.queue_on_teleport or env.queueonteleport
@@ -484,7 +502,7 @@ gui.Name = "ChallengeHandoffTest_v05"
 gui.ResetOnSpawn = false
 gui.Parent = CoreGui
 local frame = Instance.new("Frame")
-frame.Size = UDim2.fromOffset(350, 302)
+    frame.Size = UDim2.fromOffset(350, 378)
 frame.Position = UDim2.fromOffset(18, 270)
 frame.BackgroundColor3 = Color3.fromRGB(17, 21, 31)
 frame.BorderSizePixel = 0
@@ -569,18 +587,37 @@ returnModeButton.TextSize = 9
 returnModeButton.Parent = frame
 Instance.new("UICorner", returnModeButton).CornerRadius = UDim.new(0, 6)
 
-local schedulerButton = Instance.new("TextButton")
+    local schedulerButton = Instance.new("TextButton")
 schedulerButton.Size = UDim2.fromOffset(326, 34)
 schedulerButton.Position = UDim2.fromOffset(12, 238)
 schedulerButton.TextColor3 = Color3.fromRGB(230, 240, 255)
 schedulerButton.Font = Enum.Font.GothamBold
 schedulerButton.TextSize = 10
 schedulerButton.Parent = frame
-Instance.new("UICorner", schedulerButton).CornerRadius = UDim.new(0, 6)
+    Instance.new("UICorner", schedulerButton).CornerRadius = UDim.new(0, 6)
+
+    local eventActButton = Instance.new("TextButton")
+    eventActButton.Size = UDim2.fromOffset(156, 34)
+    eventActButton.Position = UDim2.fromOffset(12, 276)
+    eventActButton.TextColor3 = Color3.fromRGB(235, 244, 255)
+    eventActButton.Font = Enum.Font.GothamBold
+    eventActButton.TextSize = 9
+    eventActButton.Parent = frame
+    Instance.new("UICorner", eventActButton).CornerRadius = UDim.new(0, 6)
+
+    local eventProfileButton = Instance.new("TextButton")
+    eventProfileButton.Size = UDim2.fromOffset(160, 34)
+    eventProfileButton.Position = UDim2.fromOffset(178, 276)
+    eventProfileButton.TextColor3 = Color3.fromRGB(235, 244, 255)
+    eventProfileButton.Font = Enum.Font.GothamBold
+    eventProfileButton.TextSize = 9
+    eventProfileButton.TextTruncate = Enum.TextTruncate.AtEnd
+    eventProfileButton.Parent = frame
+    Instance.new("UICorner", eventProfileButton).CornerRadius = UDim.new(0, 6)
 
 local phaseLabel = Instance.new("TextLabel")
 phaseLabel.Size = UDim2.fromOffset(326, 18)
-phaseLabel.Position = UDim2.fromOffset(12, 278)
+    phaseLabel.Position = UDim2.fromOffset(12, 320)
 phaseLabel.BackgroundTransparency = 1
 phaseLabel.TextColor3 = Color3.fromRGB(103, 124, 161)
 phaseLabel.Font = Enum.Font.Code
@@ -758,7 +795,7 @@ local function processBatch(data)
     data.profile = nil
     if data.schedulerEnabled then
         data.completedCycle = data.cycle or currentChallengeCycle()
-        setPhase(data, "returning_to_farm", "No runnable challenges remain; resuming event1...")
+        setPhase(data, "returning_to_farm", "No runnable challenges remain; resuming selected Event profile...")
         local left, leaveError = leaveChallengeListForHub()
         if not left then return false, leaveError end
         return resumeSelectedFarm(data)
@@ -785,7 +822,7 @@ local function runStage(data)
     setPhase(data, "challenge_stage", "Challenge server detected; starting " .. data.profile .. "...")
 
     -- Do not rely on the config file alone: Tower Macro has already loaded its
-    -- own in-memory state by this point and may still have event1 selected.
+    -- own in-memory state by this point and may still have another profile selected.
     local selected = false
     if type(sharedEnv.__TowerMacroSelectProfile) == "function" then
         local ok, result = pcall(sharedEnv.__TowerMacroSelectProfile, data.profile)
@@ -875,7 +912,7 @@ local function runStage(data)
                 local returnPhase = moreChallenges and "returning_to_hub" or "returning_to_farm"
                 local returnMessage = moreChallenges
                     and "Return confirmed; opening the next challenge..."
-                    or "Last selected challenge finished; resuming event1..."
+                    or "Last selected challenge finished; resuming selected Event profile..."
                 setPhase(data, returnPhase, returnMessage)
                 local queued, queueError = queueCombinedLoader(data)
                 if not queued then
@@ -996,18 +1033,21 @@ launchEventFarm = function(data)
     task.wait(0.75)
     click(eventMode)
 
-    local actOne = waitForPattern("^Act 1%s*%-", 10)
-    if not actOne then return false, "Event Act 1 card was not found" end
-    status.Text = "Selecting Event Act 1..."
+    local eventAct = math.max(1, math.min(3, math.floor(tonumber(data.eventAct) or 1)))
+    data.eventAct = eventAct
+    local actCard = waitForPattern("^Act " .. tostring(eventAct) .. "%s*%-", 10)
+    if not actCard then return false, "Event Act " .. tostring(eventAct) .. " card was not found" end
+    status.Text = "Selecting Event Act " .. tostring(eventAct) .. "..."
     task.wait(0.75)
-    click(actOne)
+    click(actCard)
     local selectStage = waitFor(playerGui, "Select Stage", 8)
     if not selectStage then return false, "Event Select Stage did not appear" end
 
-    local selected, selectError = selectMacroProfile(data.resumeProfile or "event1")
+    local eventProfile = data.eventProfile or data.resumeProfile or "event1"
+    local selected, selectError = selectMacroProfile(eventProfile)
     if not selected then return false, tostring(selectError) end
     data.profile = nil
-    setPhase(data, "entering_farm", "Launching Event Act 1; waiting for teleport...")
+    setPhase(data, "entering_farm", "Launching Event Act " .. eventAct .. "; waiting for teleport...")
     local queued, queueError = queueCombinedLoader(data)
     if not queued then return false, tostring(queueError) end
 
@@ -1115,10 +1155,10 @@ end
 local function runResumedFarm(data)
     local expeditionMode = (data.returnMode or data.resumeMode) == "expedition"
     status.Text = expeditionMode and "Expedition server detected; starting sequence..."
-        or ("Event server detected; starting " .. (data.resumeProfile or "event1") .. "...")
+        or ("Event server detected; starting " .. (data.resumeProfile or data.eventProfile or "event1") .. "...")
 
     if not expeditionMode then
-        local wanted = data.resumeProfile or "event1"
+        local wanted = data.resumeProfile or data.eventProfile or "event1"
         local selected = false
         if type(sharedEnv.__TowerMacroSelectProfile) == "function" then
             local ok, result = pcall(sharedEnv.__TowerMacroSelectProfile, wanted)
@@ -1172,7 +1212,7 @@ local function runResumedFarm(data)
         task.wait(0.8)
     end
     challengeLog("CLICK", expeditionMode and "RUN SEQUENCE after farm return"
-        or "RUN PROFILE event1 after farm return")
+        or ("RUN PROFILE " .. tostring(data.resumeProfile or data.eventProfile or "event1") .. " after farm return"))
     clickOnce(runProfile)
 
     if not expeditionMode then
@@ -1192,12 +1232,12 @@ local function runResumedFarm(data)
     if data.schedulerEnabled then
         setPhase(data, "farm_running", expeditionMode
             and "FULL CYCLE COMPLETE: Expedition resumed; scheduler armed"
-            or "FULL CYCLE COMPLETE: event1 resumed; scheduler armed")
+            or ("FULL CYCLE COMPLETE: " .. tostring(data.resumeProfile or data.eventProfile or "event1") .. " resumed; scheduler armed"))
         monitorFarmResult(data)
     else
         setPhase(data, "farm_resumed", expeditionMode
             and "FULL CYCLE COMPLETE: Expedition resumed"
-            or "FULL CYCLE COMPLETE: event1 resumed")
+            or ("FULL CYCLE COMPLETE: " .. tostring(data.resumeProfile or data.eventProfile or "event1") .. " resumed"))
     end
 end
 
@@ -1248,6 +1288,17 @@ if data.returnMode ~= "event" and data.returnMode ~= "expedition"
     and data.returnMode ~= "hub" then
     data.returnMode = "event"
 end
+data.eventAct = math.max(1, math.min(3, math.floor(tonumber(data.eventAct) or 1)))
+do
+    local profileNames, selectedProfile = macroProfileNames()
+    local known = false
+    for _, profileName in ipairs(profileNames) do
+        if profileName == data.eventProfile then known = true break end
+    end
+    if not known then
+        data.eventProfile = selectedProfile or profileNames[1] or "event1"
+    end
+end
 phaseLabel.Text = "PHASE: " .. tostring(data.phase)
 
 local function refreshReturnModeButton()
@@ -1259,6 +1310,19 @@ local function refreshReturnModeButton()
             or Color3.fromRGB(53, 55, 68))
 end
 refreshReturnModeButton()
+
+local function refreshEventActButton()
+    eventActButton.Text = "EVENT ACT: " .. tostring(data.eventAct)
+    eventActButton.BackgroundColor3 = Color3.fromRGB(71, 52, 95)
+end
+
+local function refreshEventProfileButton()
+    eventProfileButton.Text = "EVENT PROFILE: " .. tostring(data.eventProfile or "event1")
+    eventProfileButton.BackgroundColor3 = Color3.fromRGB(35, 69, 92)
+end
+
+refreshEventActButton()
+refreshEventProfileButton()
 
 local function refreshSchedulerButton()
     schedulerButton.Text = data.schedulerEnabled
@@ -1299,7 +1363,8 @@ end
 sharedEnv.__TowerChallengeFarmStarted = function(profileName)
     if not data.schedulerEnabled then return end
     data.resumeMode = data.returnMode
-    data.resumeProfile = data.returnMode == "event" and "event1" or profileName
+    data.resumeProfile = data.returnMode == "event"
+        and (data.eventProfile or profileName or "event1") or profileName
     data.farmProfile = profileName
     if data.completedCycle == nil then
         data.completedCycle = currentChallengeCycle() - 1
@@ -1460,6 +1525,8 @@ start.MouseButton1Click:Connect(function()
         enabled = data.enabled,
         schedulerEnabled = data.schedulerEnabled,
         returnMode = data.returnMode,
+        eventAct = data.eventAct,
+        eventProfile = data.eventProfile,
     }
     start.Text = "WORKING..."
     task.spawn(function()
@@ -1483,7 +1550,9 @@ startHub.MouseButton1Click:Connect(function()
         returnMode = data.returnMode,
         cycle = math.floor(workspace:GetServerTimeNow() / 1800),
         resumeMode = data.returnMode,
-        resumeProfile = data.returnMode == "event" and "event1" or nil,
+        eventAct = data.eventAct,
+        eventProfile = data.eventProfile,
+        resumeProfile = data.returnMode == "event" and (data.eventProfile or "event1") or nil,
     }
     saveState(data)
     phaseLabel.Text = "PHASE: opening_challenges"
@@ -1507,12 +1576,37 @@ returnModeButton.MouseButton1Click:Connect(function()
     refreshReturnModeButton()
 end)
 
+eventActButton.MouseButton1Click:Connect(function()
+    if running then return end
+    data.eventAct = data.eventAct % 3 + 1
+    if data.returnMode == "event" then data.resumeProfile = data.eventProfile end
+    saveState(data)
+    refreshEventActButton()
+end)
+
+eventProfileButton.MouseButton1Click:Connect(function()
+    if running then return end
+    local names = macroProfileNames()
+    if #names == 0 then
+        status.Text = "No saved Macro profiles found"
+        return
+    end
+    local index = 0
+    for i, name in ipairs(names) do
+        if name == data.eventProfile then index = i break end
+    end
+    data.eventProfile = names[index % #names + 1]
+    if data.returnMode == "event" then data.resumeProfile = data.eventProfile end
+    saveState(data)
+    refreshEventProfileButton()
+end)
+
 schedulerButton.MouseButton1Click:Connect(function()
     data.schedulerEnabled = not data.schedulerEnabled
     if data.schedulerEnabled then
         data.completedCycle = currentChallengeCycle() - 1
         data.resumeMode = data.returnMode
-        data.resumeProfile = data.returnMode == "event" and "event1" or nil
+        data.resumeProfile = data.returnMode == "event" and (data.eventProfile or "event1") or nil
         data.processed = {}
         setPhase(data, "farm_running", "Auto Challenge enabled; current cycle is pending")
         monitorFarmResult(data)
@@ -1534,7 +1628,9 @@ armFarm.MouseButton1Click:Connect(function()
         returnMode = data.returnMode,
         cycle = math.floor(workspace:GetServerTimeNow() / 1800),
         resumeMode = data.returnMode,
-        resumeProfile = data.returnMode == "event" and "event1" or nil,
+        eventAct = data.eventAct,
+        eventProfile = data.eventProfile,
+        resumeProfile = data.returnMode == "event" and (data.eventProfile or "event1") or nil,
     }
     saveState(data)
     phaseLabel.Text = "PHASE: farm_running"
