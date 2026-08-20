@@ -15,7 +15,8 @@ local function fetch(name)
     error("[AnimeExpedition] Cannot download " .. name .. ": " .. tostring(body))
 end
 
--- Download shared data and the companion before Tower Macro starts.`r`nfetch("EquipmentDatabase_v3_84515722934860.json")
+-- Download shared data and the companion before Tower Macro starts.
+fetch("EquipmentDatabase_v3_84515722934860.json")
 fetch("challenge_handoff_test.lua")
 local source = fetch("tower_macro.lua")
 local chunk, compileError = loadstring(source)
