@@ -1,4 +1,4 @@
--- Tower Macro v1.4.1
+-- Tower Macro v1.5.0
 -- Client-only recorder/player: keys 1-6, T and left mouse clicks.
 -- No RemoteEvents and no server-side calls.
 
@@ -13,7 +13,7 @@ local GuiService = game:GetService("GuiService")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 local CONFIG_FILE = "TowerMacro_" .. player.Name .. ".json"
-local GUI_NAME = "TowerMacro_v141"
+local GUI_NAME = "TowerMacro_v150"
 local sharedEnv = (getgenv and getgenv()) or _G
 
 -- Auto Queue and Auto Challenge used to register two loaders for the same
@@ -72,6 +72,15 @@ local state = {
     towerFloor = nil,
     towerMap = nil,
     towerProfile = nil,
+    mapProfiles = {
+        ["rose kingdom"] = "Rose_Kingdom",
+        ["school grounds"] = "School Grounds_ch",
+        ["flower forest"] = "Flower_forest",
+        ["king's tomb"] = "Kings_Tomb",
+        ["kings tomb"] = "Kings_Tomb",
+        ["fairy king forest"] = "Fairy_King_Forest_ch",
+        ["east town"] = "East_Town",
+    },
 }
 
 sharedEnv.__TowerMacroShutdown = function()
@@ -118,6 +127,7 @@ local function saveConfig()
             selectedExpedition = state.selectedExpedition,
             expeditionProfiles = state.expeditionProfiles,
             autoQueueEnabled = state.autoQueue,
+            mapProfiles = state.mapProfiles,
         }))
     end)
     if not ok then
@@ -143,6 +153,13 @@ local function loadConfig()
         state.expeditionProfiles = type(result.expeditionProfiles) == "table"
             and result.expeditionProfiles or {}
         state.selectedExpedition = result.selectedExpedition
+        if type(result.mapProfiles) == "table" then
+            for map, profile in pairs(result.mapProfiles) do
+                if type(map) == "string" and type(profile) == "string" then
+                    state.mapProfiles[map:lower()] = profile
+                end
+            end
+        end
         if type(result.autoQueueEnabled) == "boolean" then
             state.autoQueue = result.autoQueueEnabled
         end
@@ -228,7 +245,7 @@ local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, -24, 0, 38)
 title.Position = UDim2.fromOffset(12, 0)
 title.BackgroundTransparency = 1
-title.Text = "TOWER MACRO  В·  v1.3.2"
+title.Text = "TOWER MACRO  ·  v1.5.0"
 title.TextColor3 = Color3.fromRGB(225, 230, 255)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 14
@@ -423,12 +440,11 @@ local function makeTab(text, x, width)
     return button
 end
 
-local macroTabButton = makeTab("MACRO", 0, 52)
-local smartTabButton = makeTab("SMART", 56, 52)
-local expeditionTabButton = makeTab("EXPED.", 112, 52)
-local towerTabButton = makeTab("TOWER", 168, 52)
-local dpsTabButton = makeTab("DPS", 224, 52)
-local statusTabButton = makeTab("STATUS", 280, 56)
+local macroTabButton = makeTab("MACRO", 0, 64)
+local expeditionTabButton = makeTab("EXPED.", 68, 64)
+local towerTabButton = makeTab("TOWER", 136, 64)
+local dpsTabButton = makeTab("DPS", 204, 64)
+local statusTabButton = makeTab("STATUS", 272, 64)
 
 local function makePage(name)
     local page = Instance.new("Frame")
@@ -442,6 +458,7 @@ end
 
 local macroPage = makePage("MacroPage")
 local smartPage = makePage("SmartPage")
+smartPage.Visible = false
 local expeditionPage = makePage("ExpeditionPage")
 local towerPage = makePage("TowerPage")
 local dpsPage = makePage("DPSPage")
@@ -475,10 +492,10 @@ towerUI.status.Parent = towerPage
 Instance.new("UICorner", towerUI.status).CornerRadius = UDim.new(0, 7)
 
 towerUI.help = Instance.new("TextLabel")
-towerUI.help.Size = UDim2.fromOffset(336, 150)
+towerUI.help.Size = UDim2.fromOffset(336, 86)
 towerUI.help.Position = UDim2.fromOffset(0, 144)
 towerUI.help.BackgroundColor3 = Color3.fromRGB(18, 22, 33)
-towerUI.help.Text = "MAP PROFILES\nRose Kingdom  > Rose_Kingdom\nSchool Grounds > School Grounds_ch\nFlower Forest   > Flower_forest\nKing's Tomb     > Kings_Tomb\nFairy King Forest > Fairy_King_Forest_ch\nEast Town       > East_Town"
+towerUI.help.Text = "MAP PROFILE · TOWER + CHALLENGE\nSelect a map, choose a normal macro on the MACRO tab,\nthen assign that profile here. Settings are saved locally."
 towerUI.help.TextColor3 = Color3.fromRGB(145, 163, 198)
 towerUI.help.Font = Enum.Font.Code
 towerUI.help.TextSize = 10
@@ -486,6 +503,19 @@ towerUI.help.TextXAlignment = Enum.TextXAlignment.Left
 towerUI.help.TextYAlignment = Enum.TextYAlignment.Top
 towerUI.help.Parent = towerPage
 Instance.new("UICorner", towerUI.help).CornerRadius = UDim.new(0, 7)
+towerUI.map = makeButton("MAP: ROSE KINGDOM", 0, 240, 336, Color3.fromRGB(40, 49, 75))
+move(towerUI.map, towerPage, 0, 240, 336, 32)
+towerUI.assign = makeButton("ASSIGN SELECTED MACRO", 0, 282, 336, Color3.fromRGB(45, 62, 91))
+move(towerUI.assign, towerPage, 0, 282, 336, 32)
+towerUI.mapping = Instance.new("TextLabel")
+towerUI.mapping.Size = UDim2.fromOffset(336, 34)
+towerUI.mapping.Position = UDim2.fromOffset(0, 324)
+towerUI.mapping.BackgroundColor3 = Color3.fromRGB(20, 25, 38)
+towerUI.mapping.TextColor3 = Color3.fromRGB(160, 180, 218)
+towerUI.mapping.Font = Enum.Font.Gotham
+towerUI.mapping.TextSize = 9
+towerUI.mapping.Parent = towerPage
+Instance.new("UICorner", towerUI.mapping).CornerRadius = UDim.new(0, 6)
 move(playButton, macroPage, 0, 130, 336, 32)
 playButton.Text = "OPEN MACRO SETTINGS"
 playButton.BackgroundColor3 = Color3.fromRGB(40, 48, 73)
@@ -612,7 +642,7 @@ local expeditionStatus = Instance.new("TextLabel")
 expeditionStatus.Size = UDim2.new(1, 0, 0, 72)
 expeditionStatus.Position = UDim2.fromOffset(0, 84)
 expeditionStatus.BackgroundColor3 = Color3.fromRGB(21, 25, 36)
-expeditionStatus.Text = "Idle В· waiting for configuration"
+expeditionStatus.Text = "Idle · waiting for configuration"
 expeditionStatus.TextColor3 = Color3.fromRGB(155, 180, 210)
 expeditionStatus.Font = Enum.Font.Gotham
 expeditionStatus.TextSize = 11
@@ -914,7 +944,7 @@ end
 
 local function dpsCalculate()
     if not dpsDatabase and not dpsLoadDatabase() then
-        dpsStatus.Text = "Database missing В· run Equipment Forge Probe v0.3"
+        dpsStatus.Text = "Database missing · run Equipment Forge Probe v0.3"
         dpsResults.Text = DPS_DATABASE_FILE
         return
     end
@@ -950,13 +980,13 @@ local function dpsCalculate()
     local lines = {}
     for index = 1, math.min(6, #results) do
         local row = results[index]
-        table.insert(lines, ("%d. %s\n   +%.2f%% DPS  В· D%.1f T%.1f S%.1f"):format(
+        table.insert(lines, ("%d. %s\n   +%.2f%% DPS  · D%.1f T%.1f S%.1f"):format(
             index, row.names, (row.value - 1) * 100,
             row.damage, row.typed, row.spa
         ))
     end
     dpsResults.Text = table.concat(lines, "\n")
-    dpsStatus.Text = ("%s В· %d slots В· %d combinations"):format(
+    dpsStatus.Text = ("%s · %d slots · %d combinations"):format(
         dpsUnitType, dpsSlots, #results
     )
 end
@@ -1094,7 +1124,6 @@ end)()
 
 local pages = {
     MACRO = {page = macroPage, button = macroTabButton},
-    SMART = {page = smartPage, button = smartTabButton},
     EXPEDITION = {page = expeditionPage, button = expeditionTabButton},
     TOWER = {page = towerPage, button = towerTabButton},
     DPS = {page = dpsPage, button = dpsTabButton},
@@ -1117,7 +1146,6 @@ local function showTab(name)
     if name ~= "DPS" then dpsController.close() end
 end
 macroTabButton.MouseButton1Click:Connect(function() showTab("MACRO") end)
-smartTabButton.MouseButton1Click:Connect(function() showTab("SMART") end)
 expeditionTabButton.MouseButton1Click:Connect(function() showTab("EXPEDITION") end)
 towerTabButton.MouseButton1Click:Connect(function() showTab("TOWER") end)
 dpsTabButton.MouseButton1Click:Connect(function()
@@ -1139,7 +1167,7 @@ local function refreshSmartVisual(profile, selectedSlot)
     for slot, button in ipairs(smartSlotButtons) do
         local job = profile.smart.jobs[tostring(slot)]
         local pointCount = job and type(job.points) == "table" and #job.points or 0
-        button.Text = pointCount > 0 and ("%d\nвЂў %d"):format(slot, pointCount) or tostring(slot)
+        button.Text = pointCount > 0 and ("%d\n• %d"):format(slot, pointCount) or tostring(slot)
         button.TextWrapped = true
         button.BackgroundColor3 = slot == selectedSlot
             and Color3.fromRGB(58, 73, 112)
@@ -1194,10 +1222,10 @@ refreshExpeditionSequenceVisual = function(profile)
         ))
     end
     expeditionStepList.Text = #lines > 0 and table.concat(lines, "\n")
-        or "No conditional steps\nSelect slot В· F7 point В· ADD PLACE"
-    expeditionStatus.Text = ("Idle В· %d steps В· edit slot %d%s"):format(
+        or "No conditional steps\nSelect slot · F7 point · ADD PLACE"
+    expeditionStatus.Text = ("Idle · %d steps · edit slot %d%s"):format(
         #profile.expedition.steps, slot,
-        state.expeditionDraftPoint and " В· point ready" or ""
+        state.expeditionDraftPoint and " · point ready" or ""
     )
 end
 
@@ -1301,7 +1329,7 @@ local function selectProfile(name, create)
     )
     refreshSmartVisual(profile, selectedSmartSlot)
     saveConfig()
-    local placeNote = profile.placeId and (" В· PlaceId " .. tostring(profile.placeId)) or ""
+    local placeNote = profile.placeId and (" · PlaceId " .. tostring(profile.placeId)) or ""
     log(("Selected '%s' (%d events%s)"):format(name, #(profile.events or {}), placeNote))
     return state.profiles[name]
 end
@@ -1356,7 +1384,7 @@ local function rebuildDropdown()
         item.Size = UDim2.new(1, -6, 0, 28)
         item.BackgroundColor3 = name == state.selected
             and Color3.fromRGB(49, 59, 91) or Color3.fromRGB(29, 33, 49)
-        item.Text = ("  %s  В·  %d events"):format(name, #(profile.events or {}))
+        item.Text = ("  %s  ·  %d events"):format(name, #(profile.events or {}))
         item.TextColor3 = Color3.fromRGB(225, 230, 255)
         item.Font = Enum.Font.Gotham
         item.TextSize = 11
@@ -1416,7 +1444,7 @@ local function selectExpeditionProfile(name, create)
     expeditionNameBox.Text = name
     refreshExpeditionSequenceVisual(profile)
     saveConfig()
-    log(("[Expedition] Selected '%s' В· %d steps"):format(
+    log(("[Expedition] Selected '%s' · %d steps"):format(
         name, #profile.expedition.steps
     ))
     return profile
@@ -1444,7 +1472,7 @@ local function rebuildExpeditionDropdown()
         item.Size = UDim2.new(1, -6, 0, 28)
         item.BackgroundColor3 = name == state.selectedExpedition
             and Color3.fromRGB(49, 59, 91) or Color3.fromRGB(29, 33, 49)
-        item.Text = ("  %s  В·  %d steps"):format(name, #steps)
+        item.Text = ("  %s  ·  %d steps"):format(name, #steps)
         item.TextColor3 = Color3.fromRGB(225, 230, 255)
         item.Font = Enum.Font.Gotham
         item.TextSize = 11
@@ -1582,7 +1610,7 @@ UserInputService.InputBegan:Connect(function(input)
         end
         if event then
             table.insert(state.expeditionEvents, event)
-            expeditionStatus.Text = ("Recording В· %.2fs В· %d events"):format(
+            expeditionStatus.Text = ("Recording · %.2fs · %d events"):format(
                 state.expeditionTimeline, #state.expeditionEvents
             )
             return
@@ -2258,7 +2286,7 @@ local function expeditionApplyBestRoute(profile)
 
     local edges = 0
     for _, node in ipairs(nodes) do edges += #node.next end
-    log(("[ExpeditionMap] %s best В· Material=%d Fuel=%d В· nodes=%d edges=%d"):format(
+    log(("[ExpeditionMap] %s best · Material=%d Fuel=%d · nodes=%d edges=%d"):format(
         priority, result.Material, result.Fuel, #nodes, edges
     ))
 
@@ -2474,7 +2502,7 @@ local function startExpeditionController(mode)
                 blocked = true
                 if state.expeditionDefeatSeenAt == 0 then
                     state.expeditionDefeatSeenAt = now
-                    expeditionStatus.Text = "Defeat В· waiting for result UI"
+                    expeditionStatus.Text = "Defeat · waiting for result UI"
                     log("[Expedition] Defeat detected; waiting for stable Repeat Stage")
                 end
                 if mode == "auto" and now - state.expeditionDefeatSeenAt >= 0.8
@@ -2493,7 +2521,7 @@ local function startExpeditionController(mode)
                         actionCooldown = os.clock() + 0.25
                         continue
                     end
-                    expeditionStatus.Text = "Defeat В· clicking Repeat Stage"
+                    expeditionStatus.Text = "Defeat · clicking Repeat Stage"
                     expeditionClick(freshRepeatButton)
                     actionCooldown = os.clock() + 2.0
                     state.expeditionStarted = false
@@ -2515,13 +2543,13 @@ local function startExpeditionController(mode)
                 blocked = true
                 if not state.expeditionMapRunning and now >= actionCooldown then
                     state.expeditionMapRunning = true
-                    expeditionStatus.Text = "Expedition Map В· calculating route"
+                    expeditionStatus.Text = "Expedition Map · calculating route"
                     task.spawn(function()
                         task.wait(0.25)
                         local ok, detail = expeditionApplyBestRoute(profile)
                         if state.expeditionMode == mode
                             and state.expeditionToken == token then
-                            log(("[ExpeditionMap] %s В· %s"):format(
+                            log(("[ExpeditionMap] %s · %s"):format(
                                 ok and "Applied" or "Failed", tostring(detail)
                             ))
                             task.wait(0.25)
@@ -2545,7 +2573,7 @@ local function startExpeditionController(mode)
                 blocked = true
                 if now >= actionCooldown then
                     local choice = math.random(1, #snapshot.anvils)
-                    expeditionStatus.Text = ("Stat Anvil В· random choice %d/%d"):format(
+                    expeditionStatus.Text = ("Stat Anvil · random choice %d/%d"):format(
                         choice, #snapshot.anvils
                     )
                     expeditionClick(snapshot.anvils[choice])
@@ -2559,7 +2587,7 @@ local function startExpeditionController(mode)
                 blocked = true
                 if now >= actionCooldown then
                     local choice = math.random(1, #snapshot.upgrades)
-                    expeditionStatus.Text = ("Upgrade В· random choice %d/%d"):format(
+                    expeditionStatus.Text = ("Upgrade · random choice %d/%d"):format(
                         choice, #snapshot.upgrades
                     )
                     expeditionClick(snapshot.upgrades[choice])
@@ -2572,7 +2600,7 @@ local function startExpeditionController(mode)
                 stateName = "CONFIRM"
                 blocked = true
                 if snapshot.confirmButton and now >= actionCooldown then
-                    expeditionStatus.Text = "Checkpoint В· confirming Continue"
+                    expeditionStatus.Text = "Checkpoint · confirming Continue"
                     expeditionClick(snapshot.confirmButton)
                     state.expeditionAwaitingResume = true
                     state.expeditionResumeAt = os.clock() + 1.25
@@ -2605,16 +2633,16 @@ local function startExpeditionController(mode)
                     local priority = profile.expedition.routePriority or "Off"
                     state.expeditionMapNeeded = priority ~= "Off"
                         and state.expeditionCheckpointCount % 2 == 1
-                    log(("[Expedition] Checkpoint %d В· route=%s%s"):format(
+                    log(("[Expedition] Checkpoint %d · route=%s%s"):format(
                         state.expeditionCheckpointCount,
                         tostring(priority),
-                        state.expeditionMapNeeded and " В· map scheduled" or ""
+                        state.expeditionMapNeeded and " · map scheduled" or ""
                     ))
                 end
                 if state.expeditionMapNeeded then
                     if expeditionManagerOpen and expeditionManagerOpen() then
                         if now >= actionCooldown then
-                            expeditionStatus.Text = "Checkpoint В· closing Unit Manager"
+                            expeditionStatus.Text = "Checkpoint · closing Unit Manager"
                             sendKey("F")
                             actionCooldown = os.clock() + 0.65
                             log("[ExpeditionMap] Unit Manager closed before opening map")
@@ -2623,13 +2651,13 @@ local function startExpeditionController(mode)
                         local mapLaunchButton = now >= actionCooldown
                             and expeditionMapLaunchButton() or nil
                         if mapLaunchButton and now >= actionCooldown then
-                            expeditionStatus.Text = "Checkpoint В· opening Expedition Map"
+                            expeditionStatus.Text = "Checkpoint · opening Expedition Map"
                             expeditionClick(mapLaunchButton)
                             actionCooldown = os.clock() + 1.0
                         end
                     end
                 elseif now >= actionCooldown then
-                    expeditionStatus.Text = "Checkpoint В· clicking Continue"
+                    expeditionStatus.Text = "Checkpoint · clicking Continue"
                     expeditionClick(snapshot.mainButton)
                     actionCooldown = os.clock() + 0.8
                 end
@@ -2662,7 +2690,7 @@ local function startExpeditionController(mode)
                 log("[Expedition] State: " .. stateName)
             end
             if not state.expeditionSequenceRunning or blocked then
-                expeditionStatus.Text = ("%s В· %s В· %.2fs"):format(
+                expeditionStatus.Text = ("%s · %s · %.2fs"):format(
                     mode == "record" and "RECORD" or "AUTO",
                     stateName, state.expeditionTimeline
                 )
@@ -2690,7 +2718,7 @@ local function stopExpedition(message)
         and state.expeditionProfiles[state.selectedExpedition]
     local count = profile and profile.expedition
         and #(profile.expedition.steps or {}) or 0
-    expeditionStatus.Text = ("%s В· %d saved steps"):format(
+    expeditionStatus.Text = ("%s · %d saved steps"):format(
         message or "Stopped", count
     )
     log("[Expedition] " .. (message or "Stopped"))
@@ -2798,7 +2826,7 @@ expeditionPointButton.MouseButton1Click:Connect(function()
     if not profile then return end
     saveExpeditionCamera(profile)
     saveConfig()
-    expeditionStatus.Text = "Expedition camera saved В· character position is not saved"
+    expeditionStatus.Text = "Expedition camera saved · character position is not saved"
     log("[Expedition] Camera saved without character position")
 end)
 
@@ -2901,7 +2929,7 @@ local function readGameUI()
                 result.money = uiNumber(plain)
             end
 
-            local priceText = text:match("^%s*ВҐ%s*([%d,]+)%s*$")
+            local priceText = text:match("^%s*¥%s*([%d,]+)%s*$")
             if priceText and path:find("textbutton", 1, true) then
                 table.insert(priceRows, {
                     nx = nx,
@@ -3126,21 +3154,21 @@ local function expeditionWaitMoney(amount, controllerToken, sequenceToken, label
     local affordableSince = nil
     while expeditionSequenceReady(controllerToken, sequenceToken) do
         local money = expeditionReadBalance() or readGameUI().money
-        expeditionStatus.Text = ("%s В· money %s/%s"):format(
+        expeditionStatus.Text = ("%s · money %s/%s"):format(
             label, tostring(money or "?"), tostring(amount or "?")
         )
         local report = tostring(money) .. "/" .. tostring(amount)
         if lastReported == nil or os.clock() - lastLogAt >= 3 then
             lastReported = report
             lastLogAt = os.clock()
-            log(("[Expedition] %s В· money %s / price %s"):format(
+            log(("[Expedition] %s · money %s / price %s"):format(
                 label, tostring(money or "NOT FOUND"), tostring(amount or "NOT FOUND")
             ))
         end
         if not money then
             missingSince = missingSince or os.clock()
             if os.clock() - missingSince > 5 then
-                expeditionStatus.Text = "Stopped В· Expedition balance was not found"
+                expeditionStatus.Text = "Stopped · Expedition balance was not found"
                 log("[Expedition] Balance missing for 5s; stopping sequence")
                 state.expeditionSequenceRunning = false
                 return false
@@ -3169,7 +3197,7 @@ startExpeditionSequenceWorker = function(profile, controllerToken)
 
     task.spawn(function()
         if not expeditionEnsureManagerOpen(sequenceToken) then
-            expeditionStatus.Text = "Sequence stopped В· Unit Manager did not open"
+            expeditionStatus.Text = "Sequence stopped · Unit Manager did not open"
             state.expeditionSequenceRunning = false
             return
         end
@@ -3178,7 +3206,7 @@ startExpeditionSequenceWorker = function(profile, controllerToken)
         for index, step in ipairs(profile.expedition.steps or {}) do
             if not expeditionSequenceReady(controllerToken, sequenceToken) then return end
             local slot = math.clamp(math.floor(tonumber(step.slot) or 1), 1, 6)
-            expeditionStatus.Text = ("Step %d/%d В· %s slot %d"):format(
+            expeditionStatus.Text = ("Step %d/%d · %s slot %d"):format(
                 index, #profile.expedition.steps, tostring(step.type), slot
             )
 
@@ -3198,7 +3226,7 @@ startExpeditionSequenceWorker = function(profile, controllerToken)
                 local maxAttempts = 5
                 for attempt = 1, maxAttempts do
                     if not expeditionSequenceReady(controllerToken, sequenceToken) then return end
-                    expeditionStatus.Text = ("PLACE S%d В· attempt %d/%d"):format(
+                    expeditionStatus.Text = ("PLACE S%d · attempt %d/%d"):format(
                         slot, attempt, maxAttempts
                     )
                     sendKey(slotKeyNames[slot])
@@ -3209,11 +3237,11 @@ startExpeditionSequenceWorker = function(profile, controllerToken)
                     -- Selecting a bottom unit card closes Unit Manager in Expedition.
                     -- Reopen it once after the placement click before checking cards.
                     if not expeditionManagerOpen() then
-                        log(("[Expedition] PLACE S%d В· reopening Unit Manager with F"):format(
+                        log(("[Expedition] PLACE S%d · reopening Unit Manager with F"):format(
                             slot
                         ))
                         if not expeditionEnsureManagerOpen(sequenceToken) then
-                            log(("[Expedition] PLACE S%d В· Unit Manager did not reopen"):format(
+                            log(("[Expedition] PLACE S%d · Unit Manager did not reopen"):format(
                                 slot
                             ))
                         end
@@ -3242,18 +3270,18 @@ startExpeditionSequenceWorker = function(profile, controllerToken)
                         index, slot
                     ))
                     state.expeditionSequenceRunning = false
-                    expeditionStatus.Text = ("Stopped В· PLACE S%d unconfirmed"):format(slot)
+                    expeditionStatus.Text = ("Stopped · PLACE S%d unconfirmed"):format(slot)
                     return
                 end
                 state.expeditionRuntimeSlots[slot] = newName
                 log(("[Expedition] Step %d PLACE S%d -> %s"):format(index, slot, newName))
-                expeditionStatus.Text = "Placement confirmed В· waiting for balance to settle"
+                expeditionStatus.Text = "Placement confirmed · waiting for balance to settle"
                 task.wait(0.65)
 
             elseif step.type == "UPGRADE" then
                 local unitName = state.expeditionRuntimeSlots[slot]
                 if not unitName then
-                    expeditionStatus.Text = ("Stopped В· slot %d has no placed unit"):format(slot)
+                    expeditionStatus.Text = ("Stopped · slot %d has no placed unit"):format(slot)
                     log(("[Expedition] UPGRADE S%d has no runtime card mapping"):format(slot))
                     state.expeditionSequenceRunning = false
                     return
@@ -3264,11 +3292,11 @@ startExpeditionSequenceWorker = function(profile, controllerToken)
                 while step.toMax or completedForStep < 1 do
                     if not expeditionSequenceReady(controllerToken, sequenceToken) then return end
                     if not expeditionManagerOpen() then
-                        log(("[Expedition] UPGRADE S%d В· reopening Unit Manager with F"):format(
+                        log(("[Expedition] UPGRADE S%d · reopening Unit Manager with F"):format(
                             slot
                         ))
                         if not expeditionEnsureManagerOpen(sequenceToken) then
-                            expeditionStatus.Text = "Stopped В· Unit Manager did not open"
+                            expeditionStatus.Text = "Stopped · Unit Manager did not open"
                             state.expeditionSequenceRunning = false
                             return
                         end
@@ -3276,13 +3304,13 @@ startExpeditionSequenceWorker = function(profile, controllerToken)
                     end
                     local card = expeditionManagerCards()[unitName]
                     if not card or card.level == nil or card.max == nil then
-                        expeditionStatus.Text = "Stopped В· card unavailable: " .. unitName
+                        expeditionStatus.Text = "Stopped · card unavailable: " .. unitName
                         state.expeditionSequenceRunning = false
                         return
                     end
                     if card.level >= card.max then break end
                     if not card.price or not card.upgradeButton then
-                        expeditionStatus.Text = "Stopped В· upgrade UI unavailable: " .. unitName
+                        expeditionStatus.Text = "Stopped · upgrade UI unavailable: " .. unitName
                         log(("[Expedition] Card %s incomplete: level=%s/%s price=%s button=%s"):format(
                             unitName, tostring(card.level), tostring(card.max),
                             tostring(card.price), tostring(card.upgradeButton ~= nil)
@@ -3300,7 +3328,7 @@ startExpeditionSequenceWorker = function(profile, controllerToken)
                     -- was being awaited and closed Unit Manager. Refresh the live button.
                     if not expeditionManagerOpen() then
                         if not expeditionEnsureManagerOpen(sequenceToken) then
-                            expeditionStatus.Text = "Stopped В· Unit Manager did not reopen"
+                            expeditionStatus.Text = "Stopped · Unit Manager did not reopen"
                             state.expeditionSequenceRunning = false
                             return
                         end
@@ -3308,7 +3336,7 @@ startExpeditionSequenceWorker = function(profile, controllerToken)
                     end
                     local refreshedCard = expeditionManagerCards()[unitName]
                     if not refreshedCard or not refreshedCard.upgradeButton then
-                        expeditionStatus.Text = "Stopped В· upgrade button disappeared"
+                        expeditionStatus.Text = "Stopped · upgrade button disappeared"
                         state.expeditionSequenceRunning = false
                         return
                     end
@@ -3320,9 +3348,9 @@ startExpeditionSequenceWorker = function(profile, controllerToken)
                     expeditionClick(card.upgradeButton)
                     task.wait(0.25)
                     if not expeditionManagerOpen() then
-                        log("[Expedition] Upgrade closed Unit Manager В· reopening with F")
+                        log("[Expedition] Upgrade closed Unit Manager · reopening with F")
                         if not expeditionEnsureManagerOpen(sequenceToken) then
-                            expeditionStatus.Text = "Stopped В· Unit Manager did not reopen"
+                            expeditionStatus.Text = "Stopped · Unit Manager did not reopen"
                             state.expeditionSequenceRunning = false
                             return
                         end
@@ -3335,9 +3363,9 @@ startExpeditionSequenceWorker = function(profile, controllerToken)
                         -- Level-up / Anvil prompts close Unit Manager. Their duration
                         -- must not consume the four-second confirmation window.
                         if not expeditionManagerOpen() then
-                            log("[Expedition] Upgrade confirmation В· reopening Unit Manager")
+                            log("[Expedition] Upgrade confirmation · reopening Unit Manager")
                             if not expeditionEnsureManagerOpen(sequenceToken) then
-                                expeditionStatus.Text = "Stopped В· Unit Manager did not reopen"
+                                expeditionStatus.Text = "Stopped · Unit Manager did not reopen"
                                 state.expeditionSequenceRunning = false
                                 return
                             end
@@ -3352,14 +3380,14 @@ startExpeditionSequenceWorker = function(profile, controllerToken)
                     if not upgraded then
                         failedClicks += 1
                         if failedClicks >= 3 then
-                            expeditionStatus.Text = "Stopped В· upgrade failed after 3 attempts"
+                            expeditionStatus.Text = "Stopped · upgrade failed after 3 attempts"
                             log(("[Expedition] Upgrade click for %s failed after 3 attempts"):format(
                                 unitName
                             ))
                             state.expeditionSequenceRunning = false
                             return
                         end
-                        log(("[Expedition] Upgrade click for %s was intercepted В· retry %d/3"):format(
+                        log(("[Expedition] Upgrade click for %s was intercepted · retry %d/3"):format(
                             unitName, failedClicks + 1
                         ))
                         task.wait(0.50)
@@ -3379,9 +3407,9 @@ startExpeditionSequenceWorker = function(profile, controllerToken)
                 for attempt = 1, 3 do
                     if not expeditionSequenceReady(controllerToken, sequenceToken) then return end
                     if not expeditionManagerOpen() then
-                        log(("[Expedition] AUTO S%d В· reopening Unit Manager with F"):format(slot))
+                        log(("[Expedition] AUTO S%d · reopening Unit Manager with F"):format(slot))
                         if not expeditionEnsureManagerOpen(sequenceToken) then
-                            expeditionStatus.Text = "Stopped В· Unit Manager did not open for AUTO"
+                            expeditionStatus.Text = "Stopped · Unit Manager did not open for AUTO"
                             state.expeditionSequenceRunning = false
                             return
                         end
@@ -3389,13 +3417,13 @@ startExpeditionSequenceWorker = function(profile, controllerToken)
                     end
                     local card = unitName and expeditionManagerCards()[unitName]
                     if not card or not card.autoButton then
-                        expeditionStatus.Text = ("Stopped В· AUTO card missing for slot %d"):format(slot)
+                        expeditionStatus.Text = ("Stopped · AUTO card missing for slot %d"):format(slot)
                         state.expeditionSequenceRunning = false
                         return
                     end
                     if card.level and card.max and card.level >= card.max then
                         autoConfirmed = true
-                        log(("[Expedition] AUTO S%d %s skipped В· already maxed %d/%d"):format(
+                        log(("[Expedition] AUTO S%d %s skipped · already maxed %d/%d"):format(
                             slot, unitName, card.level, card.max
                         ))
                         break
@@ -3403,7 +3431,7 @@ startExpeditionSequenceWorker = function(profile, controllerToken)
                     expeditionMovePointerAway()
                     task.wait(0.06)
                     local beforeSignature = expeditionButtonVisualSignature(card.autoButton)
-                    log(("[Expedition] AUTO S%d %s В· click attempt %d/3 at %.3f,%.3f"):format(
+                    log(("[Expedition] AUTO S%d %s · click attempt %d/3 at %.3f,%.3f"):format(
                         slot, unitName, attempt, card.autoNx or -1, card.autoNy or -1
                     ))
                     expeditionClick(card.autoButton)
@@ -3425,7 +3453,7 @@ startExpeditionSequenceWorker = function(profile, controllerToken)
                     task.wait(0.30)
                 end
                 if not autoConfirmed then
-                    expeditionStatus.Text = ("Stopped В· AUTO S%d was not confirmed"):format(slot)
+                    expeditionStatus.Text = ("Stopped · AUTO S%d was not confirmed"):format(slot)
                     log(("[Expedition] AUTO S%d %s failed after 3 attempts"):format(
                         slot, tostring(unitName)
                     ))
@@ -3439,7 +3467,7 @@ startExpeditionSequenceWorker = function(profile, controllerToken)
 
         if state.expeditionSequenceToken == sequenceToken then
             state.expeditionSequenceRunning = false
-            expeditionStatus.Text = ("Sequence complete В· %d steps В· waiting for result"):format(
+            expeditionStatus.Text = ("Sequence complete · %d steps · waiting for result"):format(
                 #(profile.expedition.steps or {})
             )
             log("[Expedition] Conditional sequence completed")
@@ -3740,7 +3768,7 @@ addKeyButton.MouseButton1Click:Connect(function()
     end)
     profile.placeId = profile.placeId or game.PlaceId
     saveConfig()
-    log(("Added %s at %.3fs В· now %d events"):format(
+    log(("Added %s at %.3fs · now %d events"):format(
         keyName, timestamp, #profile.events
     ))
 end)
@@ -3863,16 +3891,50 @@ end
 -- Keep the complete controller inside one table. Luau has a 200-local limit
 -- per top-level chunk; table methods add no persistent top-level registers.
 local Tower = {
-    profiles = {
-        ["rose kingdom"] = "Rose_Kingdom",
-        ["school grounds"] = "School Grounds_ch",
-        ["flower forest"] = "Flower_forest",
-        ["king's tomb"] = "Kings_Tomb",
-        ["kings tomb"] = "Kings_Tomb",
-        ["fairy king forest"] = "Fairy_King_Forest_ch",
-        ["east town"] = "East_Town",
+    mapIndex = 1,
+    maps = {
+        {key = "rose kingdom", label = "Rose Kingdom"},
+        {key = "school grounds", label = "School Grounds"},
+        {key = "flower forest", label = "Flower Forest"},
+        {key = "king's tomb", label = "King's Tomb"},
+        {key = "fairy king forest", label = "Fairy King Forest"},
+        {key = "east town", label = "East Town"},
     },
 }
+
+function Tower.refreshMapping()
+    local item = Tower.maps[Tower.mapIndex]
+    local profile = state.mapProfiles[item.key]
+    towerUI.map.Text = "MAP: " .. item.label:upper()
+    towerUI.mapping.Text = profile and (item.label .. "  →  " .. profile)
+        or (item.label .. "  →  NOT ASSIGNED")
+end
+
+towerUI.map.MouseButton1Click:Connect(function()
+    Tower.mapIndex = Tower.mapIndex % #Tower.maps + 1
+    Tower.refreshMapping()
+end)
+
+towerUI.assign.MouseButton1Click:Connect(function()
+    local item = Tower.maps[Tower.mapIndex]
+    if not state.selected or not state.profiles[state.selected] then
+        Tower.status("Select a normal macro on the MACRO tab first")
+        return
+    end
+    state.mapProfiles[item.key] = state.selected
+    if item.key == "king's tomb" then state.mapProfiles["kings tomb"] = state.selected end
+    saveConfig()
+    Tower.refreshMapping()
+    Tower.status(("%s assigned to %s for Tower and Challenges"):format(
+        state.selected, item.label
+    ))
+end)
+
+Tower.refreshMapping()
+
+sharedEnv.__TowerMacroResolveMapProfile = function(map)
+    return state.mapProfiles[tostring(map or ""):lower()]
+end
 
 function Tower.status(text)
     towerUI.status.Text = tostring(text)
@@ -3930,7 +3992,7 @@ function Tower.launch(token)
         task.wait(1)
         floor, map = Tower.read()
     end
-    local profileName = map and Tower.profiles[map:lower()] or nil
+    local profileName = map and state.mapProfiles[map:lower()] or nil
     if not profileName or not state.profiles[profileName] then
         Tower.status(("Stopped: no profile for %s"):format(map or "unknown map"))
         state.towerRunning = false
@@ -4176,8 +4238,8 @@ task.spawn(function()
                     local price = gameState.prices[slot]
                     button.Text = ("%d\n%s%s"):format(
                         slot,
-                        price and ("ВҐ" .. tostring(price)) or "вЂ”",
-                        points > 0 and (" В· " .. points .. "p") or ""
+                        price and ("¥" .. tostring(price)) or "—",
+                        points > 0 and (" · " .. points .. "p") or ""
                     )
                 end
             end

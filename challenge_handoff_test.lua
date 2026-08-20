@@ -25,6 +25,14 @@ local mapProfiles = {
     ["kings tomb"] = "Kings_Tomb",
     ["fairy king forest"] = "Fairy_King_Forest_ch",
 }
+
+local function profileForMap(map)
+    if type(sharedEnv.__TowerMacroResolveMapProfile) == "function" then
+        local ok, profile = pcall(sharedEnv.__TowerMacroResolveMapProfile, map)
+        if ok and type(profile) == "string" and profile ~= "" then return profile end
+    end
+    return map and mapProfiles[map:lower()] or nil
+end
 local running = false
 local farmMonitorToken = 0
 
@@ -701,7 +709,7 @@ local function processBatch(data)
             end
             task.wait(0.40)
             local map = currentMap()
-            local profile = map and mapProfiles[map:lower()] or nil
+            local profile = profileForMap(map)
             local blocked = hasBlockedModifier()
             if blocked or not profile then
                 data.processed[key] = blocked or ("No profile for " .. tostring(map))
@@ -1360,7 +1368,7 @@ local function recoverChallengeStage()
     if not challengeSlot then return false end
 
     local map = currentMap()
-    local profile = map and mapProfiles[map:lower()] or nil
+    local profile = profileForMap(map)
     if not profile then
         setPhase(data, "failed", "Challenge recovery could not map stage '" .. tostring(map) .. "'")
         return true
