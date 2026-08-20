@@ -1,4 +1,4 @@
--- Tower Macro v1.5.0
+-- Tower Macro v1.5.1
 -- Client-only recorder/player: keys 1-6, T and left mouse clicks.
 -- No RemoteEvents and no server-side calls.
 
@@ -13,7 +13,7 @@ local GuiService = game:GetService("GuiService")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 local CONFIG_FILE = "TowerMacro_" .. player.Name .. ".json"
-local GUI_NAME = "TowerMacro_v150"
+local GUI_NAME = "TowerMacro_v151"
 local sharedEnv = (getgenv and getgenv()) or _G
 
 -- Auto Queue and Auto Challenge used to register two loaders for the same
@@ -245,7 +245,7 @@ local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, -24, 0, 38)
 title.Position = UDim2.fromOffset(12, 0)
 title.BackgroundTransparency = 1
-title.Text = "TOWER MACRO  ·  v1.5.0"
+title.Text = "TOWER MACRO  ·  v1.5.1"
 title.TextColor3 = Color3.fromRGB(225, 230, 255)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 14
@@ -256,7 +256,7 @@ local closeButton = Instance.new("TextButton")
 closeButton.Size = UDim2.fromOffset(24, 24)
 closeButton.Position = UDim2.new(1, -32, 0, 7)
 closeButton.BackgroundColor3 = Color3.fromRGB(62, 31, 40)
-closeButton.Text = "Г—"
+closeButton.Text = "×"
 closeButton.TextColor3 = Color3.fromRGB(255, 205, 215)
 closeButton.Font = Enum.Font.GothamBold
 closeButton.TextSize = 16
@@ -306,7 +306,7 @@ nameBox.ClearTextOnFocus = false
 nameBox.Parent = frame
 Instance.new("UICorner", nameBox).CornerRadius = UDim.new(0, 7)
 
-local selectButton = makeButton("CHOOSE в–ј", 228, 43, 90)
+local selectButton = makeButton("CHOOSE ▼", 228, 43, 90)
 local cameraButton = makeButton("SAVE START", 12, 81, 150)
 local deleteButton = makeButton("DELETE", 168, 81, 150, Color3.fromRGB(57, 31, 40))
 local recordButton = makeButton("RECORD", 12, 127, 98, Color3.fromRGB(65, 31, 41))
@@ -656,7 +656,7 @@ expeditionHint.Position = UDim2.fromOffset(0, 168)
 expeditionHint.BackgroundTransparency = 1
 expeditionHint.Text = "RECORD RUN automatically presses the first checkpoint.\n"
     .. "Timeline pauses on Continue and upgrade prompts.\n"
-    .. "AUTO RUN repeats forever after Defeat в†’ Repeat Stage."
+    .. "AUTO RUN repeats forever after Defeat → Repeat Stage."
 expeditionHint.TextColor3 = Color3.fromRGB(105, 120, 150)
 expeditionHint.Font = Enum.Font.Gotham
 expeditionHint.TextSize = 10
@@ -787,7 +787,7 @@ local expeditionSettingsClose = Instance.new("TextButton")
 expeditionSettingsClose.Size = UDim2.fromOffset(26, 26)
 expeditionSettingsClose.Position = UDim2.new(1, -35, 0, 6)
 expeditionSettingsClose.BackgroundColor3 = Color3.fromRGB(58, 34, 45)
-expeditionSettingsClose.Text = "Г—"
+expeditionSettingsClose.Text = "×"
 expeditionSettingsClose.TextColor3 = Color3.fromRGB(255, 215, 225)
 expeditionSettingsClose.Font = Enum.Font.GothamBold
 expeditionSettingsClose.TextSize = 15
@@ -1013,7 +1013,7 @@ end
 
 dpsLabel("UNIT TYPE", 0, 0, 164)
 dpsLabel("TOTAL SLOTS", 172, 0, 164)
-dpsTypeButton = dpsButton("PHYSICAL  в–ѕ", 0, 20, 164, Color3.fromRGB(43, 57, 91))
+dpsTypeButton = dpsButton("PHYSICAL  ▾", 0, 20, 164, Color3.fromRGB(43, 57, 91))
 dpsSlotsButton = dpsButton("3 SLOTS", 172, 20, 164, Color3.fromRGB(38, 68, 56))
 
 dpsTypeDropdown = Instance.new("Frame")
@@ -1040,7 +1040,7 @@ for index, name in ipairs({"Physical", "Magical", "Neutral"}) do
     Instance.new("UICorner", option).CornerRadius = UDim.new(0, 5)
     option.MouseButton1Click:Connect(function()
         dpsUnitType = name
-        dpsTypeButton.Text = string.upper(name) .. "  в–ѕ"
+        dpsTypeButton.Text = string.upper(name) .. "  ▾"
         dpsTypeDropdown.Visible = false
         dpsCalculate()
     end)
@@ -1200,8 +1200,8 @@ refreshExpeditionSequenceVisual = function(profile)
         routePriority = "Material"
         profile.expedition.routePriority = routePriority
     end
-    expeditionRouteButton.Text = routePriority == "Material" and "EXPEDITION MATERIAL  в–ѕ"
-        or (routePriority == "Fuel" and "FUEL CELL  в–ѕ" or "DISABLED  в–ѕ")
+    expeditionRouteButton.Text = routePriority == "Material" and "EXPEDITION MATERIAL  ▾"
+        or (routePriority == "Fuel" and "FUEL CELL  ▾" or "DISABLED  ▾")
     expeditionRouteButton.BackgroundColor3 = routePriority == "Off"
         and Color3.fromRGB(55, 38, 45)
         or (routePriority == "Fuel"
