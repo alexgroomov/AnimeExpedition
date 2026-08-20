@@ -5,6 +5,7 @@ local function fetch(name)
         return game:HttpGet(BASE .. name .. "?v=" .. tostring(os.time()))
     end)
     if ok and type(body) == "string" and #body > 100 then
+        body = body:gsub("^\239\187\191", "")
         pcall(writefile, name, body)
         return body
     end

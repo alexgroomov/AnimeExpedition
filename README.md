@@ -5,7 +5,9 @@ Auto-updating Tower Macro distribution.
 ## Launch
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/alexgroomov/AnimeExpedition/main/loader.lua?v=" .. os.time()))()
+local source = assert(game:HttpGet("https://raw.githubusercontent.com/alexgroomov/AnimeExpedition/main/loader.lua?v=latest"))
+local start, compileError = loadstring(source:gsub("^\239\187\191", ""))
+assert(start, compileError)()
 ```
 
 The loader downloads and caches `tower_macro.lua` and
