@@ -1,4 +1,4 @@
-﻿{
+{
     "version":  "1.4.1",
     "main":  "tower_macro.lua",
     "challenge":  "challenge_handoff_test.lua",

@@ -1,4 +1,4 @@
-﻿local BASE = "https://raw.githubusercontent.com/alexgroomov/AnimeExpedition/main/"
+local BASE = "https://raw.githubusercontent.com/alexgroomov/AnimeExpedition/main/"
 
 local function fetch(name)
     local ok, body = pcall(function()

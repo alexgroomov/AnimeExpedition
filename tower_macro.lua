@@ -1,4 +1,4 @@
-﻿-- Tower Macro v1.4.1
+-- Tower Macro v1.4.1
 -- Client-only recorder/player: keys 1-6, T and left mouse clicks.
 -- No RemoteEvents and no server-side calls.
 
