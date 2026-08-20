@@ -1,4 +1,4 @@
--- Tower Macro v1.5.1
+-- Tower Macro v1.5.2
 -- Client-only recorder/player: keys 1-6, T and left mouse clicks.
 -- No RemoteEvents and no server-side calls.
 
@@ -13,7 +13,7 @@ local GuiService = game:GetService("GuiService")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 local CONFIG_FILE = "TowerMacro_" .. player.Name .. ".json"
-local GUI_NAME = "TowerMacro_v151"
+local GUI_NAME = "TowerMacro_v152"
 local sharedEnv = (getgenv and getgenv()) or _G
 
 -- Auto Queue and Auto Challenge used to register two loaders for the same
@@ -61,6 +61,10 @@ local state = {
     expeditionMapNeeded = false,
     expeditionMapRunning = false,
     expeditionDefeatSeenAt = 0,
+    expeditionEncounterRunning = false,
+    expeditionEncounterNextScan = 0,
+    expeditionEncounterCachedPrompt = nil,
+    expeditionEncounterCooldownUntil = 0,
     macroResultTriggered = false,
     recording = false,
     playing = false,
@@ -245,7 +249,7 @@ local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, -24, 0, 38)
 title.Position = UDim2.fromOffset(12, 0)
 title.BackgroundTransparency = 1
-title.Text = "TOWER MACRO  ·  v1.5.1"
+title.Text = "TOWER MACRO  ·  v1.5.2"
 title.TextColor3 = Color3.fromRGB(225, 230, 255)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 14
@@ -2035,6 +2039,222 @@ local function expeditionClick(button)
     return true
 end
 
+-- Expedition Encounter -----------------------------------------------------
+-- Encounter nodes pause the payload until the nearby NPC conversation is
+-- completed. Store the namespace on state so the already-large main chunk
+-- does not consume another long-lived local register.
+state.expeditionEncounter = {}
+
+function state.expeditionEncounter.modelPosition(model)
+    local ok, pivot = pcall(function() return model:GetPivot() end)
+    return ok and pivot.Position or nil
+end
+
+function state.expeditionEncounter.findPrompt()
+    local now = os.clock()
+    local cached = state.expeditionEncounterCachedPrompt
+    if cached and cached.Parent and cached.Enabled then
+        local character = player.Character
+        local root = character and character:FindFirstChild("HumanoidRootPart")
+        local model = cached.Parent:IsA("Model") and cached.Parent
+            or cached:FindFirstAncestorWhichIsA("Model")
+        local position = model and state.expeditionEncounter.modelPosition(model)
+        if root and position and (root.Position - position).Magnitude <= 150 then
+            return cached
+        end
+    end
+    if now < state.expeditionEncounterNextScan
+        or now < state.expeditionEncounterCooldownUntil then
+        return nil
+    end
+    state.expeditionEncounterNextScan = now + 0.8
+    state.expeditionEncounterCachedPrompt = nil
+
+    local character = player.Character
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+    local npcRoot = workspace:FindFirstChild("NPCS")
+    if not root or not npcRoot then return nil end
+
+    local best, bestDistance
+    for _, prompt in ipairs(npcRoot:GetDescendants()) do
+        if prompt:IsA("ProximityPrompt") and prompt.Enabled then
+            local model = prompt.Parent:IsA("Model") and prompt.Parent
+                or prompt:FindFirstAncestorWhichIsA("Model")
+            local subText = model and expeditionClean(model:GetAttribute("SubText")):lower() or ""
+            local position = model and state.expeditionEncounter.modelPosition(model)
+            local distance = position and (root.Position - position).Magnitude or math.huge
+            if subText == "encounter" and distance <= 150
+                and (not bestDistance or distance < bestDistance) then
+                best, bestDistance = prompt, distance
+            end
+        end
+    end
+    state.expeditionEncounterCachedPrompt = best
+    return best
+end
+
+function state.expeditionEncounter.buttonLabel(button)
+    local pieces = {}
+    if button:IsA("TextButton") then
+        local own = expeditionClean(button.Text)
+        if own ~= "" then table.insert(pieces, own) end
+    end
+    for _, object in ipairs(button:GetDescendants()) do
+        if (object:IsA("TextLabel") or object:IsA("TextButton"))
+            and expeditionVisible(object) then
+            local text = expeditionClean(object.Text)
+            if text ~= "" then table.insert(pieces, text) end
+        end
+    end
+    return expeditionClean(table.concat(pieces, " | "))
+end
+
+function state.expeditionEncounter.buttons()
+    local promptGui = player.PlayerGui:FindFirstChild("Prompt")
+    if not promptGui then return {} end
+    if promptGui:IsA("LayerCollector") and not promptGui.Enabled then return {} end
+
+    local rows = {}
+    for _, object in ipairs(promptGui:GetDescendants()) do
+        if (object:IsA("TextButton") or object:IsA("ImageButton"))
+            and expeditionVisible(object) then
+            local interactable = true
+            pcall(function() interactable = object.Interactable end)
+            if object.Active and interactable then
+                table.insert(rows, {
+                    button = object,
+                    label = state.expeditionEncounter.buttonLabel(object),
+                    x = object.AbsolutePosition.X,
+                    y = object.AbsolutePosition.Y,
+                    width = object.AbsoluteSize.X,
+                    height = object.AbsoluteSize.Y,
+                    area = object.AbsoluteSize.X * object.AbsoluteSize.Y,
+                })
+            end
+        end
+    end
+    return rows
+end
+
+function state.expeditionEncounter.chooseButton(rows)
+    if #rows == 0 then return nil, "none" end
+
+    -- Confirmation screens always accept the positive answer.
+    for _, row in ipairs(rows) do
+        local label = row.label:lower()
+        if label == "yes" or label:match("^yes%s") then
+            return row.button, "Yes"
+        end
+    end
+
+    -- Initial offers and multi-answer screens use the leftmost answer.
+    local choices = {}
+    for _, row in ipairs(rows) do
+        if row.width >= 120 and row.height >= 34 and row.y >= 350
+            and row.area < 500000 then
+            table.insert(choices, row)
+        end
+    end
+    table.sort(choices, function(a, b)
+        if math.abs(a.y - b.y) <= 12 then return a.x < b.x end
+        return a.y > b.y
+    end)
+    if #choices >= 2 and math.abs(choices[1].y - choices[2].y) <= 20 then
+        local first = choices[1].x < choices[2].x and choices[1] or choices[2]
+        return first.button, first.label ~= "" and first.label or "first choice"
+    end
+
+    -- A normal speech page is one active 960x240 TextButton. The inactive
+    -- fullscreen backdrop is filtered by buttons().
+    table.sort(rows, function(a, b) return a.area > b.area end)
+    return rows[1].button, rows[1].label ~= "" and rows[1].label or "dialogue"
+end
+
+function state.expeditionEncounter.run(mode, token, prompt)
+    local function valid()
+        return state.expeditionMode == mode and state.expeditionToken == token
+    end
+    local model = prompt and (prompt.Parent:IsA("Model") and prompt.Parent
+        or prompt:FindFirstAncestorWhichIsA("Model"))
+    local destination = model and state.expeditionEncounter.modelPosition(model)
+    local character = player.Character
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+    if not destination or not humanoid or not root then
+        return false, "character or NPC position unavailable"
+    end
+
+    local distance = (root.Position - destination).Magnitude
+    log(("[Expedition] Encounter found: %s at %.1f studs"):format(
+        expeditionClean(prompt.ObjectText), distance
+    ))
+    expeditionStatus.Text = "Encounter - walking to NPC"
+    humanoid:MoveTo(destination)
+    local moveDeadline = os.clock() + 18
+    while valid() and os.clock() < moveDeadline do
+        if (root.Position - destination).Magnitude <= 8 then break end
+        humanoid:MoveTo(destination)
+        task.wait(0.25)
+    end
+    if not valid() then return false, "controller stopped" end
+    if (root.Position - destination).Magnitude > 10 then
+        return false, "NPC could not be reached"
+    end
+
+    humanoid:MoveTo(root.Position)
+    expeditionStatus.Text = "Encounter - interacting"
+    local fired = false
+    if fireproximityprompt then
+        fired = pcall(function() fireproximityprompt(prompt, 0) end)
+    end
+    if not fired then sendKey("E") end
+
+    local openDeadline = os.clock() + 8
+    local firstRows = {}
+    while valid() and os.clock() < openDeadline do
+        firstRows = state.expeditionEncounter.buttons()
+        if #firstRows > 0 then break end
+        task.wait(0.20)
+    end
+    if #firstRows == 0 then return false, "dialogue did not open" end
+
+    local firstButton, firstLabel = state.expeditionEncounter.chooseButton(firstRows)
+    if not firstButton then return false, "first offer not found" end
+    expeditionStatus.Text = "Encounter - first option"
+    expeditionClick(firstButton)
+    log("[Expedition] Encounter first option: " .. tostring(firstLabel))
+    task.wait(0.60)
+
+    local clicks = 0
+    local missingPasses = 0
+    local dialogDeadline = os.clock() + 30
+    while valid() and os.clock() < dialogDeadline do
+        local rows = state.expeditionEncounter.buttons()
+        if #rows == 0 then
+            missingPasses += 1
+            if missingPasses >= 3 then
+                task.wait(2.0)
+                return true, ("completed after %d dialogue clicks"):format(clicks)
+            end
+            task.wait(0.25)
+        else
+            missingPasses = 0
+            local button, label = state.expeditionEncounter.chooseButton(rows)
+            if button then
+                clicks += 1
+                expeditionStatus.Text = ("Encounter - %s (%d)"):format(
+                    tostring(label), clicks
+                )
+                expeditionClick(button)
+                task.wait(0.55)
+            else
+                task.wait(0.20)
+            end
+        end
+    end
+    return false, ("dialogue timeout after %d clicks"):format(clicks)
+end
+
 -- Expedition route graph ----------------------------------------------------
 -- The map exposes every connection as a separate thin ImageLabel. Its center,
 -- length and Rotation give exact endpoints, which are matched to node buttons.
@@ -2416,6 +2636,8 @@ local function expeditionSnapshot()
     local anvils = expeditionAnvilButtons()
     local mapTitle = expeditionFindText(prompt, "Expedition Map")
     local mapBack = mapTitle and expeditionFindText(prompt, "Back") or nil
+    local encounterPrompt = state.expeditionEncounterRunning and nil
+        or state.expeditionEncounter.findPrompt()
     return {
         defeat = defeat,
         repeatButton = expeditionButtonOf(repeatStage),
@@ -2426,6 +2648,7 @@ local function expeditionSnapshot()
         anvils = anvils,
         mapOpen = mapTitle ~= nil,
         mapBackButton = expeditionButtonOf(mapBack),
+        encounterPrompt = encounterPrompt,
     }
 end
 
@@ -2475,6 +2698,10 @@ local function startExpeditionController(mode)
     state.expeditionMapNeeded = false
     state.expeditionMapRunning = false
     state.expeditionDefeatSeenAt = 0
+    state.expeditionEncounterRunning = false
+    state.expeditionEncounterCachedPrompt = nil
+    state.expeditionEncounterNextScan = 0
+    state.expeditionEncounterCooldownUntil = 0
     state.expeditionSequenceToken += 1
     local token = state.expeditionToken
     expeditionRecordButton.Text = mode == "record" and "RECORDING..." or "RECORD RUN"
@@ -2535,8 +2762,45 @@ local function startExpeditionController(mode)
                     state.expeditionMapNeeded = false
                     state.expeditionMapRunning = false
                     state.expeditionDefeatSeenAt = 0
+                    state.expeditionEncounterRunning = false
+                    state.expeditionEncounterCachedPrompt = nil
+                    state.expeditionEncounterCooldownUntil = os.clock() + 2.0
                     unlockAutomationCamera()
                     log("[Expedition] Defeat -> Repeat Stage")
+                end
+            elseif state.expeditionEncounterRunning or snapshot.encounterPrompt then
+                stateName = "ENCOUNTER"
+                blocked = true
+                if snapshot.encounterPrompt and not state.expeditionEncounterRunning
+                    and now >= actionCooldown then
+                    state.expeditionEncounterRunning = true
+                    actionCooldown = now + 1.0
+                    local activeEncounterPrompt = snapshot.encounterPrompt
+                    task.spawn(function()
+                        local ok, success, detail = pcall(
+                            state.expeditionEncounter.run,
+                            mode,
+                            token,
+                            activeEncounterPrompt
+                        )
+                        if state.expeditionMode == mode
+                            and state.expeditionToken == token then
+                            state.expeditionEncounterRunning = false
+                            state.expeditionEncounterCachedPrompt = nil
+                            state.expeditionEncounterNextScan = os.clock() + 1.0
+                            state.expeditionEncounterCooldownUntil = os.clock() + 4.0
+                            actionCooldown = os.clock() + 1.0
+                            local message = ok and tostring(detail)
+                                or ("worker error: " .. tostring(success))
+                            log(("[Expedition] Encounter %s - %s"):format(
+                                ok and success and "completed" or "failed",
+                                message
+                            ))
+                            expeditionStatus.Text = ok and success
+                                and "Encounter completed - waiting for return"
+                                or "Encounter failed - retry scheduled"
+                        end
+                    end)
                 end
             elseif snapshot.mapOpen then
                 stateName = "MAP"
@@ -2711,6 +2975,10 @@ local function stopExpedition(message)
     state.expeditionSequenceRunning = false
     state.expeditionMapRunning = false
     state.expeditionMapNeeded = false
+    state.expeditionEncounterRunning = false
+    state.expeditionEncounterCachedPrompt = nil
+    state.expeditionEncounterNextScan = 0
+    state.expeditionEncounterCooldownUntil = 0
     expeditionRecordButton.Text = "RECORD RUN"
     expeditionAutoButton.Text = "RUN SEQUENCE"
     unlockAutomationCamera()
