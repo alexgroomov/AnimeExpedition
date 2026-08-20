@@ -3,7 +3,7 @@
     "main":  "tower_macro.lua",
     "challenge":  "challenge_handoff_test.lua",
     "sha256":  {
-                   "main":  "85dc0bf5573762a7353d2e8db72be84f766d903c9911534b3ca9921ed557c2b2",
+                   "main":  "f4da9cbc991e2b0425115537059afcbdc00bd294097870466e09cc6cf78fe2a0",
                    "challenge":  "7ac3f3b01ddaed9e9f88a38fb31bbaabdacd29369245da6ae90f988d6e284bb3"
                }
 }
