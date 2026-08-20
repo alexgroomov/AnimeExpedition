@@ -1,4 +1,4 @@
-local BASE = "https://raw.githubusercontent.com/alexgroomov/AnimeExpedition/main/"
+﻿local BASE = "https://raw.githubusercontent.com/alexgroomov/AnimeExpedition/main/"
 
 local function fetch(name)
     local ok, body = pcall(function()
@@ -15,7 +15,7 @@ local function fetch(name)
     error("[AnimeExpedition] Cannot download " .. name .. ": " .. tostring(body))
 end
 
--- Tower Macro loads the companion from the executor workspace.
+-- Download shared data and the companion before Tower Macro starts.`r`nfetch("EquipmentDatabase_v3_84515722934860.json")
 fetch("challenge_handoff_test.lua")
 local source = fetch("tower_macro.lua")
 local chunk, compileError = loadstring(source)
@@ -23,3 +23,4 @@ if not chunk then
     error("[AnimeExpedition] Compile failed: " .. tostring(compileError))
 end
 return chunk()
+
