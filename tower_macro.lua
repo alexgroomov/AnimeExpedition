@@ -1,4 +1,4 @@
--- Tower Macro v1.5.2
+-- Tower Macro v1.5.4
 -- Client-only recorder/player: keys 1-6, T and left mouse clicks.
 -- No RemoteEvents and no server-side calls.
 
@@ -13,7 +13,7 @@ local GuiService = game:GetService("GuiService")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 local CONFIG_FILE = "TowerMacro_" .. player.Name .. ".json"
-local GUI_NAME = "TowerMacro_v152"
+local GUI_NAME = "TowerMacro_v154"
 local sharedEnv = (getgenv and getgenv()) or _G
 
 -- Auto Queue and Auto Challenge used to register two loaders for the same
@@ -321,6 +321,7 @@ local testButton = makeButton("TEST INPUT", 168, 165, 150)
 local listButton = makeButton("PRINT PROFILES", 12, 203, 150)
 local restoreButton = makeButton("RESTORE START", 168, 203, 150)
 local repeatButton = makeButton("REPEAT: OFF", 12, 241, 150)
+state.raidPopupButton = makeButton("RAID REWARD DISMISS: OFF", 12, 241, 150)
 local addKeyButton = makeButton("ADD KEY EVENT", 168, 279, 150)
 local runProfileButton = makeButton("RUN PROFILE", 12, 317, 306, Color3.fromRGB(32, 77, 59))
 challengeSettingsButton = makeButton("AUTO CHALLENGE SETTINGS", 12, 355, 306,
@@ -530,7 +531,7 @@ move(challengeSettingsButton, macroPage, 0, 172, 336, 32)
 ;(function()
     local settingsFrame = Instance.new("Frame")
     settingsFrame.Name = "MacroSettings"
-    settingsFrame.Size = UDim2.fromOffset(360, 300)
+    settingsFrame.Size = UDim2.fromOffset(360, 338)
     settingsFrame.Position = UDim2.new(1, 8, 0, 38)
     settingsFrame.BackgroundColor3 = Color3.fromRGB(16, 19, 29)
     settingsFrame.BorderSizePixel = 0
@@ -571,14 +572,15 @@ move(challengeSettingsButton, macroPage, 0, 172, 336, 32)
     move(stopButton, settingsFrame, 127, 82, 106, 30)
     move(restoreButton, settingsFrame, 242, 82, 106, 30)
     move(repeatButton, settingsFrame, 12, 120, 336, 30)
-    move(timeBox, settingsFrame, 12, 160, 74, 30)
-    move(keyBox, settingsFrame, 94, 160, 74, 30)
-    move(addKeyButton, settingsFrame, 176, 160, 172, 30)
-    move(hint, settingsFrame, 12, 202, 336, 48)
+    move(state.raidPopupButton, settingsFrame, 12, 158, 336, 30)
+    move(timeBox, settingsFrame, 12, 198, 74, 30)
+    move(keyBox, settingsFrame, 94, 198, 74, 30)
+    move(addKeyButton, settingsFrame, 176, 198, 172, 30)
+    move(hint, settingsFrame, 12, 240, 336, 48)
 
     for _, control in ipairs({
         cameraButton, deleteButton, recordButton, stopButton, restoreButton,
-        repeatButton, timeBox, keyBox, addKeyButton, hint,
+        repeatButton, state.raidPopupButton, timeBox, keyBox, addKeyButton, hint,
     }) do
         control.ZIndex = 21
     end
@@ -1311,6 +1313,10 @@ local function selectProfile(name, create)
     state.selected = name
     nameBox.Text = name
     local profile = state.profiles[name]
+    state.raidPopupButton.Text = profile.raidRewardDismiss
+        and "RAID REWARD DISMISS: ON" or "RAID REWARD DISMISS: OFF"
+    state.raidPopupButton.BackgroundColor3 = profile.raidRewardDismiss
+        and Color3.fromRGB(28, 62, 49) or Color3.fromRGB(33, 38, 57)
     profile.smart = type(profile.smart) == "table" and profile.smart
         or {wave = 8, reserve = 5000, slot = 6, points = {}}
     profile.smart.points = type(profile.smart.points) == "table" and profile.smart.points or {}
@@ -4011,6 +4017,23 @@ repeatButton.MouseButton1Click:Connect(function()
         or "Repeat disabled; current run will finish")
 end)
 
+state.raidPopupButton.MouseButton1Click:Connect(function()
+    local profile = state.selected and state.profiles[state.selected]
+    if not profile then
+        log("Select a macro profile first")
+        return
+    end
+    profile.raidRewardDismiss = not profile.raidRewardDismiss
+    state.raidPopupButton.Text = profile.raidRewardDismiss
+        and "RAID REWARD DISMISS: ON" or "RAID REWARD DISMISS: OFF"
+    state.raidPopupButton.BackgroundColor3 = profile.raidRewardDismiss
+        and Color3.fromRGB(28, 62, 49) or Color3.fromRGB(33, 38, 57)
+    saveConfig()
+    log(profile.raidRewardDismiss
+        and "Raid reward popup dismiss enabled for this profile"
+        or "Raid reward popup dismiss disabled for this profile")
+end)
+
 addKeyButton.MouseButton1Click:Connect(function()
     if state.recording or state.playing then
         log("Stop recording/playback before editing")
@@ -4109,9 +4132,26 @@ local function startPlayback(withSmart)
 
             if not state.macroResultTriggered then
                 log("[Macro] Timeline finished; waiting for Repeat Stage")
+                local rewardDismissCount = 0
+                local nextRewardDismissAt = os.clock() + 2.5
                 while state.playing and state.playToken == token
                     and state.repeatEnabled and not state.macroResultTriggered do
                     detectAndClickMacroRepeat()
+                    if profile.raidRewardDismiss and rewardDismissCount < 2
+                        and os.clock() >= nextRewardDismissAt
+                        and not state.macroResultTriggered then
+                        rewardDismissCount += 1
+                        local viewport = camera.ViewportSize
+                        local x, y = math.floor(viewport.X * 0.88), math.floor(viewport.Y * 0.18)
+                        VirtualInputManager:SendMouseMoveEvent(x, y, game)
+                        VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 1)
+                        task.wait(0.04)
+                        VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 1)
+                        nextRewardDismissAt = os.clock() + 1.2
+                        log(("[Macro] Raid reward dismiss click %d/2"):format(
+                            rewardDismissCount
+                        ))
+                    end
                     task.wait(0.20)
                 end
             end
