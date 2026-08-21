@@ -1,4 +1,4 @@
--- Challenge Handoff Batch Test v0.5
+-- Challenge Handoff Batch Test v0.6
 -- Processes all eligible Regular Challenges and persists progress across teleports.
 
 local Players = game:GetService("Players")
@@ -280,13 +280,50 @@ local function clickChallengeTitle(slot)
     return nativeOk or vimOk
 end
 
-local function waitFor(root, exact, timeout)
+-- Roblox often exposes a label several seconds before its menu has finished
+-- laying out and accepting input.  Treat a target as ready only after the same
+-- instance and geometry remain unchanged for a short window.
+local function waitStableFinder(finder, timeout, stableFor)
     local deadline = os.clock() + timeout
+    local candidate, signature, stableSince
     repeat
-        local object = findText(root, exact)
-        if object then return object end
+        local object = finder()
+        if object and visible(object) then
+            local p, s = object.AbsolutePosition, object.AbsoluteSize
+            local current = table.concat({
+                math.floor(p.X + 0.5), math.floor(p.Y + 0.5),
+                math.floor(s.X + 0.5), math.floor(s.Y + 0.5),
+            }, ":")
+            if object ~= candidate or current ~= signature then
+                candidate, signature, stableSince = object, current, os.clock()
+            elseif os.clock() - stableSince >= (stableFor or 0.75) then
+                return object
+            end
+        else
+            candidate, signature, stableSince = nil, nil, nil
+        end
         task.wait(0.15)
     until os.clock() >= deadline
+end
+
+local function waitFor(root, exact, timeout)
+    return waitStableFinder(function() return findText(root, exact) end, timeout, 0.75)
+end
+
+local function clickUntilGone(object, label)
+    for attempt = 1, 3 do
+        if not object or not object.Parent or not visible(object) then return true end
+        click(object)
+        local deadline = os.clock() + 2.0
+        repeat
+            if not object.Parent or not visible(object) then return true end
+            task.wait(0.20)
+        until os.clock() >= deadline
+        challengeLog("RETRY", ("%s click attempt %d/3 was not confirmed"):format(
+            tostring(label), attempt
+        ))
+    end
+    return false
 end
 
 local function loadState()
@@ -779,11 +816,14 @@ local function processBatch(data)
                     saveState(data)
                     local queued, queueError = queueCombinedLoader(data)
                     if not queued then return false, tostring(queueError) end
-                    click(buttonOf(findText(playerGui, "Select Stage")))
-                    local startLabel = waitFor(playerGui, "Start", 5)
+                    local selectStageButton = buttonOf(waitFor(playerGui, "Select Stage", 8))
+                    if not selectStageButton then return false, "Stable Select Stage button was not found" end
+                    click(selectStageButton)
+                    local startLabel = waitFor(playerGui, "Start", 10)
                     if not startLabel then return false, "Start party window did not appear" end
-                    task.wait(0.35)
-                    click(buttonOf(startLabel))
+                    if not clickUntilGone(buttonOf(startLabel) or startLabel, "Challenge Start") then
+                        return false, "Challenge Start click was not confirmed"
+                    end
                     return true
                 end
             end
@@ -920,7 +960,10 @@ local function runStage(data)
                     return
                 end
                 task.wait(0.2)
-                click(buttonOf(returnLabel))
+                if not clickUntilGone(buttonOf(returnLabel) or returnLabel,
+                    "Return to Lobby") then
+                    setPhase(data, "failed", "Return to Lobby click was not confirmed")
+                end
                 return
             end
             -- Result UI does not need frame-tight detection. A slower poll keeps
@@ -970,7 +1013,10 @@ local function monitorFarmResult(data)
                     return
                 end
                 task.wait(0.25)
-                click(buttonOf(returnLabel))
+                if not clickUntilGone(buttonOf(returnLabel) or returnLabel,
+                    "Farm Return to Lobby") then
+                    setPhase(data, "failed", "Farm Return to Lobby click was not confirmed")
+                end
                 return
             end
             task.wait(1.0)
@@ -979,17 +1025,13 @@ local function monitorFarmResult(data)
 end
 
 local function waitForPattern(pattern, timeout)
-    local deadline = os.clock() + timeout
-    repeat
-        local object = findText(playerGui, nil, pattern)
-        if object then return object end
-        task.wait(0.25)
-    until os.clock() >= deadline
+    return waitStableFinder(function()
+        return findText(playerGui, nil, pattern)
+    end, timeout, 0.75)
 end
 
 local function waitForEventCard(name, timeout)
-    local deadline = os.clock() + timeout
-    repeat
+    return waitStableFinder(function()
         local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize
             or Vector2.new(1920, 1080)
         local best
@@ -1005,42 +1047,57 @@ local function waitForEventCard(name, timeout)
                 end
             end
         end
-        if best then return best end
-        task.wait(0.25)
-    until os.clock() >= deadline
+        return best
+    end, timeout, 0.75)
 end
 
 launchEventFarm = function(data)
     status.Text = "Hub reached; opening Events..."
     local eventsLabel = waitFor(playerGui, "Events", 20)
     if not eventsLabel then return false, "Events button was not found" end
-    task.wait(0.75)
-    click(eventsLabel)
-
-    local villainCard = waitForEventCard("Villain Invasion", 10)
+    local villainCard
+    for attempt = 1, 3 do
+        click(eventsLabel)
+        villainCard = waitForEventCard("Villain Invasion", 4)
+        if villainCard then break end
+        challengeLog("RETRY", ("Events transition attempt %d/3 was not confirmed"):format(attempt))
+        eventsLabel = waitFor(playerGui, "Events", 5) or eventsLabel
+    end
     if not villainCard then return false, "Villain Invasion event card was not found" end
     status.Text = "Selecting Villain Invasion event..."
     challengeLog("CLICK", "Selecting Villain Invasion card from the Events list")
-    task.wait(0.65)
-    click(villainCard)
-    -- The Event Gamemode button exists for every event, so wait for the
-    -- selected panel to finish swapping before pressing it.
-    task.wait(1.0)
-
-    local eventMode = waitFor(playerGui, "Event Gamemode", 10)
+    local eventMode
+    for attempt = 1, 3 do
+        click(villainCard)
+        eventMode = waitFor(playerGui, "Event Gamemode", 4)
+        if eventMode then break end
+        challengeLog("RETRY", ("Villain Invasion transition attempt %d/3 was not confirmed"):format(attempt))
+        villainCard = waitForEventCard("Villain Invasion", 5) or villainCard
+    end
     if not eventMode then return false, "Event Gamemode button was not found" end
     status.Text = "Opening Event Gamemode..."
-    task.wait(0.75)
-    click(eventMode)
 
     local eventAct = math.max(1, math.min(3, math.floor(tonumber(data.eventAct) or 1)))
     data.eventAct = eventAct
-    local actCard = waitForPattern("^Act " .. tostring(eventAct) .. "%s*%-", 10)
+    local actPattern = "^Act " .. tostring(eventAct) .. "%s*%-"
+    local actCard
+    for attempt = 1, 3 do
+        click(eventMode)
+        actCard = waitForPattern(actPattern, 4)
+        if actCard then break end
+        challengeLog("RETRY", ("Event Gamemode transition attempt %d/3 was not confirmed"):format(attempt))
+        eventMode = waitFor(playerGui, "Event Gamemode", 5) or eventMode
+    end
     if not actCard then return false, "Event Act " .. tostring(eventAct) .. " card was not found" end
     status.Text = "Selecting Event Act " .. tostring(eventAct) .. "..."
-    task.wait(0.75)
-    click(actCard)
-    local selectStage = waitFor(playerGui, "Select Stage", 8)
+    local selectStage
+    for attempt = 1, 3 do
+        click(actCard)
+        selectStage = waitFor(playerGui, "Select Stage", 4)
+        if selectStage then break end
+        challengeLog("RETRY", ("Event Act transition attempt %d/3 was not confirmed"):format(attempt))
+        actCard = waitForPattern(actPattern, 5) or actCard
+    end
     if not selectStage then return false, "Event Select Stage did not appear" end
 
     local eventProfile = data.eventProfile or data.resumeProfile or "event1"
@@ -1051,12 +1108,12 @@ launchEventFarm = function(data)
     local queued, queueError = queueCombinedLoader(data)
     if not queued then return false, tostring(queueError) end
 
-    task.wait(0.55)
     click(buttonOf(selectStage) or selectStage)
-    local startLabel = waitFor(playerGui, "Start", 8)
+    local startLabel = waitFor(playerGui, "Start", 10)
     if not startLabel then return false, "Event party Start did not appear" end
-    task.wait(0.55)
-    click(buttonOf(startLabel) or startLabel)
+    if not clickUntilGone(buttonOf(startLabel) or startLabel, "Event Start") then
+        return false, "Event Start click was not confirmed"
+    end
     return true
 end
 

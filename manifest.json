@@ -1,9 +1,9 @@
 ﻿{
-    "version":  "1.5.4",
+    "version":  "1.5.5",
     "main":  "tower_macro.lua",
     "challenge":  "challenge_handoff_test.lua",
     "sha256":  {
                    "main":  "3789115ee09d4721a467a13d9e263110d89d2733b6ac50d399705ac50aa03284",
-                   "challenge":  "f32567e1b17d7ee6d7b83154d81b263a3e7ea50704a23bbdc2289cd90c7b84bd"
+                   "challenge":  "b9fbb61b46d3af5eeb2b0470e06019e39e00b9ac4299ed2faba78a098b703fb3"
                }
 }
