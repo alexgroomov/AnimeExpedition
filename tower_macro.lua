@@ -1,4 +1,4 @@
--- Tower Macro v1.5.4
+-- Tower Macro v1.5.6
 -- Client-only recorder/player: keys 1-6, T and left mouse clicks.
 -- No RemoteEvents and no server-side calls.
 
@@ -13,7 +13,7 @@ local GuiService = game:GetService("GuiService")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 local CONFIG_FILE = "TowerMacro_" .. player.Name .. ".json"
-local GUI_NAME = "TowerMacro_v154"
+local GUI_NAME = "TowerMacro_v156"
 local sharedEnv = (getgenv and getgenv()) or _G
 
 -- Auto Queue and Auto Challenge used to register two loaders for the same
@@ -249,7 +249,7 @@ local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, -24, 0, 38)
 title.Position = UDim2.fromOffset(12, 0)
 title.BackgroundTransparency = 1
-title.Text = "TOWER MACRO  ·  v1.5.2"
+title.Text = "TOWER MACRO  ·  v1.5.6"
 title.TextColor3 = Color3.fromRGB(225, 230, 255)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 14
@@ -2398,7 +2398,10 @@ local function expeditionGraphAttachRewards(root, nodes)
                     local best, bestScore
                     for _, node in ipairs(nodes) do
                         local dx = math.abs(node.point.X - point.X)
-                        local dy = math.abs(node.point.Y - point.Y)
+                        -- Reward cards are rendered above their node. Absolute
+                        -- Y distance could attach a lower-row reward to the
+                        -- node above it and make the optimiser score the wrong branch.
+                        local dy = node.point.Y - point.Y
                         if dx <= 60 and dy >= 18 and dy <= 155 then
                             local score = dx * 4 + dy
                             if not bestScore or score < bestScore then
@@ -2460,39 +2463,30 @@ local function expeditionGraphBetter(a, b, priority)
 end
 
 local function expeditionGraphSolve(nodes, priority)
-    local bestAt = {}
-    for _, node in ipairs(nodes) do
-        local bestParent
-        for _, parent in ipairs(node.previous) do
-            local candidate = bestAt[parent]
-            if candidate and expeditionGraphBetter(candidate, bestParent, priority) then
-                bestParent = candidate
+    -- Enumerate complete routes instead of relying on screen-X sorting as a
+    -- topological order. Diagonal/overlapping columns can put a child before
+    -- its parent and used to silently discard the richer route.
+    local best
+    local function walk(node, path, material, fuel, visiting)
+        if visiting[node] then return end
+        visiting[node] = true
+        table.insert(path, node)
+        material += node.Material
+        fuel += node.Fuel
+        if #node.next == 0 then
+            local result = {Material = material, Fuel = fuel, path = {}}
+            for _, item in ipairs(path) do table.insert(result.path, item) end
+            if expeditionGraphBetter(result, best, priority) then best = result end
+        else
+            for _, child in ipairs(node.next) do
+                walk(child, path, material, fuel, visiting)
             end
         end
-        if bestParent then
-            local path = {}
-            for _, old in ipairs(bestParent.path) do table.insert(path, old) end
-            table.insert(path, node)
-            bestAt[node] = {
-                Material = bestParent.Material + node.Material,
-                Fuel = bestParent.Fuel + node.Fuel,
-                path = path,
-            }
-        elseif #node.previous == 0 then
-            bestAt[node] = {
-                Material = node.Material,
-                Fuel = node.Fuel,
-                path = {node},
-            }
-        end
+        table.remove(path)
+        visiting[node] = nil
     end
-    local best
     for _, node in ipairs(nodes) do
-        local result = bestAt[node]
-        if #node.next == 0 and result
-            and expeditionGraphBetter(result, best, priority) then
-            best = result
-        end
+        if #node.previous == 0 then walk(node, {}, 0, 0, {}) end
     end
     return best
 end
@@ -2515,6 +2509,14 @@ local function expeditionApplyBestRoute(profile)
     log(("[ExpeditionMap] %s best · Material=%d Fuel=%d · nodes=%d edges=%d"):format(
         priority, result.Material, result.Fuel, #nodes, edges
     ))
+
+    local routeDebug = {}
+    for _, node in ipairs(result.path) do
+        table.insert(routeDebug, ("N%d(M%d/F%d)"):format(
+            node.id, node.Material, node.Fuel
+        ))
+    end
+    log("[ExpeditionMap] Chosen path: " .. table.concat(routeDebug, " -> "))
 
     -- Start and boss are mandatory. Intermediate nodes fix every branch.
     for index = 2, #result.path - 1 do
