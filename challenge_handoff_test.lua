@@ -1,4 +1,4 @@
--- Challenge Handoff Batch Test v0.6
+-- Challenge Handoff Batch Test v0.7
 -- Processes all eligible Regular Challenges and persists progress across teleports.
 
 local Players = game:GetService("Players")
@@ -861,6 +861,13 @@ local function runStage(data)
     end
     setPhase(data, "challenge_stage", "Challenge server detected; starting " .. data.profile .. "...")
 
+    -- Stage identity and Tower Macro can appear before the game's remaining UI
+    -- controllers finish initialising after a slow teleport. Keep an explicit
+    -- post-detection buffer before selecting and starting the profile.
+    status.Text = "Challenge detected; waiting 3s for stage UI to settle..."
+    challengeLog("WAIT", "Challenge entry UI settle delay: 3.0s")
+    task.wait(3.0)
+
     -- Do not rely on the config file alone: Tower Macro has already loaded its
     -- own in-memory state by this point and may still have another profile selected.
     local selected = false
@@ -1535,6 +1542,9 @@ elseif data.phase == "leaving_result" or data.phase == "returning_to_hub"
             local play = findText(playerGui, "Play")
             if play then
                 setPhase(data, "returning_to_hub", "Hub detected; continuing remaining challenges...")
+                status.Text = "Hub detected; waiting 3s for lobby UI to settle..."
+                challengeLog("WAIT", "Challenge return lobby UI settle delay: 3.0s")
+                task.wait(3.0)
                 local ok, err = openChallengeBatchFromHub(data,
                     "Hub recovered; opening the next selected challenge...")
                 if not ok then setPhase(data, "failed", tostring(err)) end
@@ -1563,6 +1573,9 @@ elseif data.phase == "returning_to_farm" then
                 return
             end
             if findText(playerGui, "Play") then
+                status.Text = "Hub detected; waiting 3s before opening selected farm mode..."
+                challengeLog("WAIT", "Final challenge return UI settle delay: 3.0s")
+                task.wait(3.0)
                 local ok, err = resumeSelectedFarm(data)
                 if not ok then setPhase(data, "failed", tostring(err)) end
                 return
